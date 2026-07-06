@@ -1,6 +1,6 @@
 # ✍️ Blog Writing Agent
 
-A multi-agent AI pipeline that researches, plans, writes, and illustrates technical blog posts — fully automated using **LangGraph**, **Groq**, **Tavily** and **HuggingFace**.
+A multi-agent AI pipeline that researches, plans, writes, and illustrates technical blog posts — fully automated using **LangGraph**, **Groq**, **Tavily** and **Gemini**.
 
 ---
 
@@ -44,7 +44,7 @@ Topic Input
 | **Workers** | Each task runs in parallel; writes one markdown section with optional code + citations |
 | **merge_content** | Sorts and joins all worker sections into a single markdown document |
 | **decide_images** | LLM decides where images help; inserts `[[IMAGE_N]]` placeholders |
-| **generate_images** | Calls HuggingFace (fal-ai) to generate images and replaces placeholders |
+| **generate_images** | Calls Gemini to generate images and replaces placeholders |
 
 ---
 
@@ -66,9 +66,9 @@ pip install -r requirements.txt
 Create a `.env` file in the project root:
 
 ```env
-GROQ_API_KEY=gsk_...
+GROQ_API_KEY=gsk_... / OPENAI_API_KEY=...
 TAVILY_API_KEY=tvly-...          # Optional — enables web research
-HUGGINGFACEHUB_API_TOKEN=hf_... # Optional — enables image generation
+GOOGLE_API_KEY=... # Optional — enables image generation
 ```
 
 > ⚠️ Never commit your `.env` file. It is already listed in `.gitignore`.
@@ -131,7 +131,7 @@ blog writing agent/
 |---|---|---|
 | `GROQ_API_KEY` | ✅ Yes | LLM for all text generation |
 | `TAVILY_API_KEY` | ⚡ Optional | Web research (hybrid / open_book mode) |
-| `HUGGINGFACEHUB_API_TOKEN` | 🖼️ Optional | AI image generation |
+| `GOOGLE_API_KEY` | 🖼️ Optional | AI image generation |
 
 > Without Tavily, the agent runs in `closed_book` mode (evergreen topics only).  
 > Without HuggingFace, image placeholders are left as blockquote error notes in the markdown.
