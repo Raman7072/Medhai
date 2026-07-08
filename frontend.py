@@ -66,7 +66,7 @@ def safe_slug(title: str) -> str:
     return s or "blog"
 
 
-def bundle_zip(md_text: str, md_filename: str, images_dir: Path) -> bytes:
+def bundle_zip(md_text: str, md_filename: str, images_dir: Path, allowed_filenames: Optional[set] = None) -> bytes:
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
         z.writestr(md_filename, md_text.encode("utf-8"))
@@ -74,17 +74,21 @@ def bundle_zip(md_text: str, md_filename: str, images_dir: Path) -> bytes:
         if images_dir.exists() and images_dir.is_dir():
             for p in images_dir.rglob("*"):
                 if p.is_file():
+                    if allowed_filenames is not None and p.name not in allowed_filenames:
+                        continue
                     z.write(p, arcname=str(p))
     return buf.getvalue()
 
 
-def images_zip(images_dir: Path) -> Optional[bytes]:
+def images_zip(images_dir: Path, allowed_filenames: Optional[set] = None) -> Optional[bytes]:
     if not images_dir.exists() or not images_dir.is_dir():
         return None
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
         for p in images_dir.rglob("*"):
             if p.is_file():
+                if allowed_filenames is not None and p.name not in allowed_filenames:
+                    continue
                 z.write(p, arcname=str(p))
     return buf.getvalue()
 
@@ -248,6 +252,7 @@ if _COOKIES_AVAILABLE and _cookie_manager and st.session_state.get("logout_pendi
     st.session_state.pop("logout_pending", None)
     try:
         _cookie_manager.delete("inkgraph_session", key="logout_delete_cookie")
+        _cookie_manager.delete("inkgraph_page", key="logout_delete_page_cookie")
     except Exception:
         pass
 
@@ -260,7 +265,7 @@ if _AUTH_AVAILABLE and _COOKIES_AVAILABLE and "user" not in st.session_state:
         cookies = _cookie_manager.get_all()
         if not cookies and not st.session_state["cookie_checked"]:
             st.session_state["cookie_checked"] = True
-            show_loading_screen("TELEPORTING...", "Securing Session Tunnel")
+            show_loading_screen("REFRESHING...", "F5 on duty")
             st.stop()
         else:
             if cookies:
@@ -269,7 +274,7 @@ if _AUTH_AVAILABLE and _COOKIES_AVAILABLE and "user" not in st.session_state:
                     _user_from_cookie = verify_session_token(str(_token))
                     if _user_from_cookie:
                         st.session_state["user"] = _user_from_cookie
-                        st.session_state["page"] = "home"
+                        st.session_state["page"] = cookies.get("inkgraph_page", "home")
 
 # ── Auth helpers ─────────────────────────────────────────────
 def _render_auth_page():
@@ -288,7 +293,7 @@ def _render_auth_page():
         </div>
         """, unsafe_allow_html=True)
 
-        tab_login, tab_reg = st.tabs(["🔑  Login", "📝  Register"])
+        tab_login, tab_reg = st.tabs(["LOGIN", "REGISTER"])
 
         with tab_login:
             if "login_error" in st.session_state:
@@ -437,7 +442,7 @@ def _render_profile_page(user: dict):
                   color:#f1f5f9; margin:0 0 4px 0; }
     .stat-label { font-family:'Courier Prime', 'Courier', monospace; font-size:0.78rem; color:#64748b;
                   text-transform:uppercase; letter-spacing:1px; }
-    .stat-icon  { font-size:1.6rem; margin-bottom:0.5rem; display:block; }
+    .stat-tag   { font-family:'Courier Prime', 'Courier', monospace; font-size:0.75rem; font-weight:700; color:#6366f1; letter-spacing:1px; margin-bottom:0.6rem; display:block; }
     
     /* Native Streamlit border container overrides for Glassmorphism */
     div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -481,8 +486,15 @@ def _render_profile_page(user: dict):
     """, unsafe_allow_html=True)
 
     # ── Back navigation ──────────────────────────────────────
-    if st.button("← Back to InkGraph", key="back_from_profile"):
+    if st.button("BACK TO INKGRAPH", key="back_from_profile"):
         st.session_state["back_to_home_pending"] = True
+        if _COOKIES_AVAILABLE and _cookie_manager:
+            _cookie_manager.set(
+                "inkgraph_page",
+                "home",
+                max_age=30 * 24 * 3600,
+                key="back_home_page_cookie_set"
+            )
         st.rerun()
 
     # ── Hero profile card ─────────────────────────────────────
@@ -492,7 +504,7 @@ def _render_profile_page(user: dict):
         <div style="position:relative;z-index:1;">
             <div class="pg-name">{stats['name']}</div>
             <div class="pg-email">{stats['email']}</div>
-            <span class="pg-badge">⭐ Member since {ms_str}</span>
+            <span class="pg-badge">MEMBER SINCE {ms_str.upper()}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -500,16 +512,16 @@ def _render_profile_page(user: dict):
     # ── Stat cards ────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
     cards = [
-        (c1, "📝", str(stats["blog_count"]), "Blogs Generated"),
-        (c2, "🖼️", str(stats["image_count"]), "Images Created"),
-        (c3, "📅", str(days_active), "Days Active"),
-        (c4, "⚡", str(stats["blog_count"] * 6), "Sections Written"),
+        (c1, "DOCS", str(stats["blog_count"]), "Blogs Generated"),
+        (c2, "IMGS", str(stats["image_count"]), "Images Created"),
+        (c3, "DAYS", str(days_active), "Days Active"),
+        (c4, "SECT", str(stats["blog_count"] * 6), "Sections Written"),
     ]
-    for col, icon, num, label in cards:
+    for col, tag, num, label in cards:
         with col:
             st.markdown(f"""
             <div class="stat-card">
-                <span class="stat-icon">{icon}</span>
+                <span class="stat-tag">{tag}</span>
                 <div class="stat-num">{num}</div>
                 <div class="stat-label">{label}</div>
             </div>
@@ -555,7 +567,7 @@ def _render_profile_page(user: dict):
             <div class="pg-section-title" style="margin-bottom:1rem;">Account Settings</div>
             """, unsafe_allow_html=True)
 
-            with st.expander("✏️ Change Display Name", expanded=False):
+            with st.expander("Change Display Name", expanded=False):
                 with st.form("change_name_form"):
                     new_name = st.text_input("New Name", value=stats["name"])
                     if st.form_submit_button("Update Name", type="primary", use_container_width=True):
@@ -567,7 +579,7 @@ def _render_profile_page(user: dict):
                         else:
                             st.error("Name cannot be empty.")
 
-            with st.expander("🔒 Change Password", expanded=False):
+            with st.expander("Change Password", expanded=False):
                 with st.form("change_pass_form"):
                     old_p = st.text_input("Current Password", type="password")
                     new_p = st.text_input("New Password", type="password", placeholder="Min 6 characters")
@@ -585,12 +597,12 @@ def _render_profile_page(user: dict):
         # Danger zone
         with st.container(border=True):
             st.markdown("""
-            <div class="danger-header pg-section-title" style="color:#f87171; margin-bottom:0.3rem;">⚠️ Danger Zone</div>
+            <div class="danger-header pg-section-title" style="color:#f87171; margin-bottom:0.3rem;">Danger Zone</div>
             <div style="font-family:'Courier Prime', 'Courier', monospace; font-size:0.8rem; color:#64748b; margin-bottom:0.8rem;">
                 Permanently deletes your account and all generated blogs.
             </div>
             """, unsafe_allow_html=True)
-            with st.expander("🗑 Delete My Account", expanded=False):
+            with st.expander("Delete My Account", expanded=False):
                 with st.form("delete_acc_form"):
                     confirm_pass = st.text_input("Enter your password to confirm", type="password")
                     if st.form_submit_button("Delete Account Forever", use_container_width=True):
@@ -618,6 +630,17 @@ h1, h2, h3, h4, h5, h6 {
     font-family: 'Courier Prime', 'Courier', monospace;
     font-weight: 700;
     letter-spacing: -0.5px;
+}
+
+.cyber-tab-header {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #a5b4fc;
+    letter-spacing: 0.8px;
+    margin: 0.5rem 0 1.5rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .stApp {
@@ -998,7 +1021,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.danger-header) {
 
 # Intercept pending auth database load actions (shows loading screen while querying)
 if "login_pending" in st.session_state:
-    show_loading_screen("TELEPORTING...", "Verifying Credentials")
+    show_loading_screen("Check Post!!!", "Verifying Credentials")
     pending = st.session_state.pop("login_pending")
     user = login_user(pending["email"], pending["password"])
     if user:
@@ -1011,13 +1034,19 @@ if "login_pending" in st.session_state:
                 max_age=30 * 24 * 3600,
                 key="login_cookie_set"
             )
+            _cookie_manager.set(
+                "inkgraph_page",
+                "home",
+                max_age=30 * 24 * 3600,
+                key="login_page_cookie_set"
+            )
         st.session_state["page"] = "home"
     else:
         st.session_state["login_error"] = "Invalid email or password."
     st.rerun()
 
 if "register_pending" in st.session_state:
-    show_loading_screen("TELEPORTING...", "Creating Secure Account")
+    show_loading_screen("H! HUMAN...", "Creating Secure Account")
     pending = st.session_state.pop("register_pending")
     result = register_user(pending["name"], pending["email"], pending["password"])
     if isinstance(result, dict):
@@ -1029,6 +1058,12 @@ if "register_pending" in st.session_state:
                 create_session_token(result),
                 max_age=30 * 24 * 3600,
                 key="register_cookie_set"
+            )
+            _cookie_manager.set(
+                "inkgraph_page",
+                "home",
+                max_age=30 * 24 * 3600,
+                key="register_page_cookie_set"
             )
         st.session_state["page"] = "home"
     else:
@@ -1056,7 +1091,7 @@ if "profile_pending" in st.session_state:
     st.rerun()
 
 if "back_to_home_pending" in st.session_state:
-    show_loading_screen("TELEPORTING...", "Loading Dashboard Matrix")
+    show_loading_screen("RETURNING...", "Loading Dashboard Matrix")
     st.session_state.pop("back_to_home_pending")
     st.session_state["page"] = "home"
     st.rerun()
@@ -1096,10 +1131,17 @@ with st.sidebar:
         #         color:#64748b;">{_current_user['email']}</div>
         # </div>
         # """, unsafe_allow_html=True)
-        if st.button("👤 My Profile", use_container_width=True):
+        if st.button("MY PROFILE", use_container_width=True):
             st.session_state["profile_pending"] = True
+            if _COOKIES_AVAILABLE and _cookie_manager:
+                _cookie_manager.set(
+                    "inkgraph_page",
+                    "profile",
+                    max_age=30 * 24 * 3600,
+                    key="profile_page_cookie_set"
+                )
             st.rerun()
-        if st.button("Logout", use_container_width=True):
+        if st.button("LOGOUT", use_container_width=True):
             st.session_state["logout_pending"] = True
             st.session_state["logged_out"] = True
             st.session_state.pop("user", None)
@@ -1112,23 +1154,23 @@ with st.sidebar:
     # ── Generate section ─────────────────────────────────
     st.markdown("""
     <div class="sidebar-header">
-      ⚡ Generate New Blog
+      GENERATE NEW BLOG
     </div>
     """, unsafe_allow_html=True)
 
     topic = st.text_area(
-        "📌 Topic",
+        "TOPIC",
         height=120,
         placeholder="e.g. How Transformer attention works…",
     )
-    as_of = st.date_input("📅 As of date", value=date.today())
-    run_btn = st.button("Generate Blog", type="primary")
+    as_of = st.date_input("AS OF DATE", value=date.today())
+    run_btn = st.button("GENERATE BLOG", type="primary")
 
     st.divider()
     st.markdown("""
     <div style="font-family:'Courier',monospace; font-size:0.9rem; font-weight:600;
         color:#e2e8f0; margin-bottom:0.5rem; letter-spacing:0.5px; text-transform:uppercase;">
-        📚 My Blogs
+        MY BLOGS
     </div>""", unsafe_allow_html=True)
 
     if _AUTH_AVAILABLE and _current_user:
@@ -1157,7 +1199,7 @@ with st.sidebar:
         )
         selected_blog_id = _blog_id_map.get(_sel_label)
 
-        if st.button("Load selected blog"):
+        if st.button("LOAD SELECTED BLOG"):
             if selected_blog_id and _current_user:
                 _blog = get_blog_content(selected_blog_id, _current_user["id"])
                 if _blog:
@@ -1168,14 +1210,14 @@ with st.sidebar:
                     st.session_state["last_out"] = {
                         "plan": None,
                         "evidence": [],
-                        "image_specs": [],
+                        "image_specs": [{"filename": _img["filename"], "alt": "Loaded Image", "caption": _img["filename"]} for _img in _blog.get("images", [])],
                         "final": _blog["content"],
                     }
                     st.success("Blog loaded.")
                     st.rerun()
 
     st.divider()
-    st.markdown("© 2026 Raman - All rights reserved.")
+    st.markdown("© 2026 InkGraph - All rights reserved.")
     
 
 # Keep your topic input as-is; optionally prefill for next run after loading a blog
@@ -1189,7 +1231,7 @@ if "last_out" not in st.session_state:
 
 # Layout
 tab_plan, tab_evidence, tab_preview, tab_images, tab_logs = st.tabs(
-    ["🧩 Plan", "🔎 Evidence", "📝 Markdown Preview", "🖼️ Images", "🧾 Logs"]
+    ["PLAN", "EVIDENCE", "MARKDOWN PREVIEW", "IMAGES", "LOGS"]
 )
 
 logs: List[str] = []
@@ -1316,9 +1358,11 @@ if run_btn:
 # Render last result (if any)
 out = st.session_state.get("last_out")
 if out:
+    specs = out.get("image_specs") or []
+    allowed_filenames = {s["filename"] for s in specs if isinstance(s, dict) and "filename" in s}
     # --- Plan tab ---
     with tab_plan:
-        st.markdown("<h3 style='color:#a5b4fc;'>🧩 Blog Plan</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='cyber-tab-header'>BLOG PLAN</div>", unsafe_allow_html=True)
         plan_obj = out.get("plan")
         if not plan_obj:
             st.info("No plan found in output.")
@@ -1359,7 +1403,7 @@ if out:
 
     # --- Evidence tab ---
     with tab_evidence:
-        st.markdown("<h3 style='color:#a5b4fc;'>🔎 Research Evidence</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='cyber-tab-header'>RESEARCH EVIDENCE</div>", unsafe_allow_html=True)
         evidence = out.get("evidence") or []
         if not evidence:
             st.info("No evidence returned (maybe closed_book mode or no Tavily key/results).")
@@ -1380,7 +1424,7 @@ if out:
 
     # --- Preview tab ---
     with tab_preview:
-        st.markdown("<h3 style='color:#a5b4fc;'>📝 Article Preview</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='cyber-tab-header'>ARTICLE PREVIEW</div>", unsafe_allow_html=True)
         final_md = out.get("final") or ""
         if not final_md:
             st.warning("No final markdown found.")
@@ -1398,15 +1442,15 @@ if out:
 
             md_filename = f"{safe_slug(blog_title)}.md"
             st.download_button(
-                "⬇️ Download Markdown",
+                "DOWNLOAD MARKDOWN",
                 data=final_md.encode("utf-8"),
                 file_name=md_filename,
                 mime="text/markdown",
             )
 
-            bundle = bundle_zip(final_md, md_filename, Path("images"))
+            bundle = bundle_zip(final_md, md_filename, Path("images"), allowed_filenames)
             st.download_button(
-                "📦 Download Bundle (MD + images)",
+                "DOWNLOAD BUNDLE (MD + IMAGES)",
                 data=bundle,
                 file_name=f"{safe_slug(blog_title)}_bundle.zip",
                 mime="application/zip",
@@ -1414,29 +1458,29 @@ if out:
 
     # --- Images tab ---
     with tab_images:
-        st.markdown("<h3 style='color:#a5b4fc;'>🖼️ Generated Images</h3>", unsafe_allow_html=True)
-        specs = out.get("image_specs") or []
+        st.markdown("<div class='cyber-tab-header'>GENERATED IMAGES</div>", unsafe_allow_html=True)
         images_dir = Path("images")
 
-        if not specs and not images_dir.exists():
+        if not allowed_filenames:
             st.info("No images generated for this blog.")
         else:
-            if specs:
+            detailed_specs = [s for s in specs if isinstance(s, dict) and "prompt" in s]
+            if detailed_specs:
                 st.write("**Image plan:**")
-                st.json(specs)
+                st.json(detailed_specs)
 
             if images_dir.exists():
-                files = [p for p in images_dir.iterdir() if p.is_file()]
+                files = [p for p in images_dir.iterdir() if p.is_file() and p.name in allowed_filenames]
                 if not files:
-                    st.warning("images/ exists but is empty.")
+                    st.warning("No image files found on disk for this blog.")
                 else:
                     for p in sorted(files):
                         st.image(str(p), caption=p.name, use_container_width=True)
 
-                z = images_zip(images_dir)
+                z = images_zip(images_dir, allowed_filenames)
                 if z:
                     st.download_button(
-                        "⬇️ Download Images (zip)",
+                        "DOWNLOAD IMAGES (ZIP)",
                         data=z,
                         file_name="images.zip",
                         mime="application/zip",
@@ -1444,7 +1488,7 @@ if out:
 
     # --- Logs tab ---
     with tab_logs:
-        st.markdown("<h3 style='color:#a5b4fc;'>🧾 Event Logs</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='cyber-tab-header'>EVENT LOGS</div>", unsafe_allow_html=True)
         if "logs" not in st.session_state:
             st.session_state["logs"] = []
         if logs:
@@ -1454,8 +1498,8 @@ if out:
 else:
     st.markdown("""
     <div class="cyber-ready-card">
-      <div class="cyber-ready-icon">✍️</div>
-      <h3 class="cyber-ready-title">Awaiting Topic Input</h3>
+      <div class="cyber-ready-icon" style="color: #6366f1; font-family: 'Courier Prime', 'Courier', monospace; font-size: 3rem; letter-spacing: -2px; margin-bottom: 1.5rem;">[&gt;_]</div>
+      <h3 class="cyber-ready-title">AWAITING TOPIC INPUT</h3>
       <p style="font-family: 'Courier',monospace; color: #94a3b8; font-size: 0.95rem; margin-bottom: 1.5rem;">
         Please specify a topic in the side console to initialize the neural compiler.
       </p>
