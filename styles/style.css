@@ -1,0 +1,583 @@
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+/* ── Smooth global transitions ── */
+*, *::before, *::after {
+    box-sizing: border-box;
+    transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Base Override */
+html, body, [class*="css"] {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    color: #cbd5e1;
+    scroll-behavior: smooth;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.cyber-tab-header {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #a5b4fc;
+    letter-spacing: 0.8px;
+    margin: 0.5rem 0 1.5rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stApp {
+    background-color: #060810 !important;
+    background-image:
+        radial-gradient(ellipse at 0% 0%,   rgba(99, 102, 241, 0.18) 0px, transparent 55%),
+        radial-gradient(ellipse at 100% 0%,  rgba(139, 92, 246, 0.14) 0px, transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(45, 212, 191, 0.10) 0px, transparent 60%),
+        radial-gradient(ellipse at 80% 60%,  rgba(236, 72, 153, 0.06) 0px, transparent 45%) !important;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Ambient blob 1 — indigo */
+.stApp::before {
+    content: '';
+    position: fixed;
+    top: 8%;
+    left: 10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Ambient blob 2 — teal */
+.stApp::after {
+    content: '';
+    position: fixed;
+    bottom: 10%;
+    right: 10%;
+    width: 650px;
+    height: 650px;
+    background: radial-gradient(circle, rgba(45, 212, 191, 0.10) 0%, transparent 70%);
+    filter: blur(130px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ── Glassmorphic Sidebar ── */
+[data-testid="stSidebar"] {
+    background: rgba(8, 10, 22, 0.55) !important;
+    backdrop-filter: blur(48px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(48px) saturate(180%) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.07) !important;
+    box-shadow: 1px 0 0 rgba(255,255,255,0.04), 20px 0 60px rgba(0, 0, 0, 0.55) !important;
+    z-index: 100;
+    transition: box-shadow 0.4s ease !important;
+}
+
+/* Sidebar header */
+.sidebar-header {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 12px;
+    margin-bottom: 22px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Sidebar Widget labels */
+[data-testid="stSidebar"] label[data-testid="stWidgetLabel"] p,
+label[data-testid="stWidgetLabel"] p {
+    color: #94a3b8 !important;
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.5px;
+}
+
+/* ── Frosted Input Fields ── */
+.stTextArea textarea, .stTextInput input, .stDateInput input {
+    background: rgba(255, 255, 255, 0.025) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    color: #f1f5f9 !important;
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.03) !important;
+    transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+    padding: 0.7rem 1rem !important;
+    backdrop-filter: blur(8px) !important;
+}
+
+.stTextArea textarea:hover, .stTextInput input:hover, .stDateInput input:hover {
+    background: rgba(255, 255, 255, 0.035) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.stTextArea textarea:focus, .stTextInput input:focus, .stDateInput input:focus {
+    background: rgba(99, 102, 241, 0.06) !important;
+    border-color: rgba(165, 180, 252, 0.55) !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 0 24px rgba(165,180,252,0.18), inset 0 1px 3px rgba(0,0,0,0.2) !important;
+    outline: none !important;
+}
+
+/* Primary generate button with soft gradient glow styling */
+[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, rgba(129, 140, 248, 0.8) 0%, rgba(45, 212, 191, 0.8) 100%) !important;
+    color: #f5f5f5 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(12px) !important;
+    border-radius: 12px !important;
+    padding: 0.75rem 1.5rem !important;
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px !important;
+    width: 100% !important;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    box-shadow: 0 4px 20px rgba(129, 140, 248, 0.25) !important;
+    cursor: pointer;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 30px rgba(129, 140, 248, 0.35), 0 0 20px rgba(45, 212, 191, 0.25) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:active {
+    transform: translateY(0px) !important;
+}
+
+/* Secondary Button inside Sidebar (e.g. Load selected blog) */
+[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
+    background: rgba(255, 255, 255, 0.03) !important;
+    color: #cbd5e1 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 12px !important;
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    width: 100% !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    cursor: pointer;
+}
+
+[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #f5f5f5 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Radio buttons list in sidebar */
+[data-testid="stRadio"] label {
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    font-size: 0.9rem !important;
+    color: #94a3b8 !important;
+    transition: all 0.2s ease;
+}
+
+[data-testid="stRadio"] label:hover {
+    color: #f5f5f5 !important;
+}
+
+/* Tabs: Cyber Holographic styling */
+.stTabs [data-baseweb="tab-list"] {
+    background: rgba(255, 255, 255, 0.02) !important;
+    border-radius: 16px !important;
+    padding: 0.4rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    gap: 8px !important;
+    margin-bottom: 2rem !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+    padding: 0.5rem 1.2rem !important;
+    border-radius: 12px !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    border: 1px solid transparent !important;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: #f5f5f5 !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.stTabs [aria-selected="true"] {
+    background: rgba(129, 140, 248, 0.15) !important;
+    color: #f5f5f5 !important;
+    border: 1px solid rgba(129, 140, 248, 0.3) !important;
+    box-shadow: 0 4px 20px rgba(129, 140, 248, 0.2) !important;
+}
+
+/* ── Frosted Glass Panels, Expanders ── */
+.stDataFrame, [data-testid="stExpander"] {
+    background: rgba(255, 255, 255, 0.025) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    border-radius: 18px !important;
+    backdrop-filter: blur(40px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(40px) saturate(160%) !important;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07) !important;
+    transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+[data-testid="stExpander"]:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border-color: rgba(99, 102, 241, 0.25) !important;
+    box-shadow: 0 12px 48px rgba(99,102,241,0.12), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Status box override */
+[data-testid="stStatus"] {
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 14px !important;
+    color: #cbd5e1 !important;
+    box-shadow: 0 4px 25px rgba(0,0,0,0.2) !important;
+}
+
+/* Download buttons */
+.stDownloadButton > button {
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 12px !important;
+    color: #cbd5e1 !important;
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    padding: 0.65rem 1.4rem !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.stDownloadButton > button:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #f5f5f5 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* Custom Animations & Component Styles */
+.cyber-header {
+    position: relative;
+    padding: 3rem 2rem;
+    margin-bottom: 2.4rem;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    text-align: center;
+    box-shadow:
+        0 2px 0 rgba(255,255,255,0.06) inset,
+        0 16px 56px rgba(0,0,0,0.45),
+        0 0 80px rgba(99,102,241,0.06);
+    backdrop-filter: blur(48px) saturate(180%);
+    -webkit-backdrop-filter: blur(48px) saturate(180%);
+    overflow: hidden;
+    animation: slideUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cyber-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(135deg,
+            rgba(6, 8, 16, 0.72) 0%,
+            rgba(6, 8, 16, 0.58) 50%,
+            rgba(6, 8, 16, 0.72) 100%),
+        linear-gradient(135deg,
+            rgba(99,102,241,0.10) 0%,
+            rgba(45,212,191,0.05) 50%,
+            rgba(139,92,246,0.08) 100%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.cyber-header h1,
+.cyber-header .cyber-subtitle,
+.cyber-header .cyber-badge-container {
+    position: relative;
+    z-index: 2;
+}
+
+.cyber-header::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(165,180,252,0.4) 30%,
+        rgba(45,212,191,0.4) 70%,
+        transparent 100%);
+    pointer-events: none;
+}
+
+.cyber-title {
+    font-family: 'Courier Prime', 'Courier', monospace !important;
+    font-size: 3rem !important;
+    font-weight: 800 !important;
+    margin: 0 0 0.5rem 0 !important;
+    background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 50%, #2dd4bf 100%);
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    text-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+    letter-spacing: -1px !important;
+}
+
+.cyber-subtitle {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-weight: 400;
+    font-size: 0.95rem;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+    letter-spacing: 0.5px;
+}
+
+.cyber-badge-container {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.cyber-badge {
+    display: inline-block;
+    padding: 0.35rem 0.9rem;
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-weight: 500;
+    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    border-radius: 8px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.cyber-ready-card {
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 28px;
+    padding: 3.5rem 2rem;
+    text-align: center;
+    max-width: 650px;
+    margin: 3.5rem auto;
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(25px);
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-ready-icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 4px 15px rgba(255, 255, 255, 0.15));
+    animation: float 4s ease-in-out infinite;
+}
+
+.cyber-ready-title {
+    font-family: 'Courier Prime', 'Courier', monospace;
+    color: #f5f5f5;
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.5px;
+}
+
+/* ── Glassmorphic Border Containers (global) ── */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: rgba(255, 255, 255, 0.028) !important;
+    backdrop-filter: blur(44px) saturate(170%) !important;
+    -webkit-backdrop-filter: blur(44px) saturate(170%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.09) !important;
+    border-radius: 22px !important;
+    padding: 1.8rem !important;
+    margin-bottom: 1.6rem !important;
+    box-shadow:
+        0 2px 0 rgba(255,255,255,0.05) inset,
+        0 8px 40px rgba(0,0,0,0.28),
+        0 1px 0 rgba(0,0,0,0.5) !important;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    border-color: rgba(255,255,255,0.13) !important;
+    box-shadow:
+        0 2px 0 rgba(255,255,255,0.07) inset,
+        0 12px 48px rgba(0,0,0,0.32) !important;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.danger-header) {
+    background: rgba(239, 68, 68, 0.05) !important;
+    border: 1px solid rgba(239, 68, 68, 0.2) !important;
+    box-shadow: 0 4px 32px rgba(239, 68, 68, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.02) !important;
+}
+
+/* ── Liquid glass CSS (profile page) ── */
+.pg-hero {
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 28px;
+    padding: 2.5rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.35),
+                inset 0 1px 0 rgba(255,255,255,0.12),
+                inset 0 -1px 0 rgba(0,0,0,0.2);
+    position: relative;
+    overflow: hidden;
+}
+.pg-hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg,
+        rgba(165,180,252,0.08) 0%,
+        rgba(45,212,191,0.05) 50%,
+        rgba(139,92,246,0.08) 100%);
+    pointer-events: none;
+}
+.pg-hero::after {
+    content: '';
+    position: absolute;
+    top: -60%; left: -30%;
+    width: 120%; height: 120%;
+    background: radial-gradient(ellipse, rgba(165,180,252,0.08) 0%, transparent 70%);
+    animation: liquidShimmer 6s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+
+.pg-avatar {
+    width: 90px; height: 90px; min-width: 90px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #2dd4bf 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Courier Prime', 'Courier', monospace;
+    font-size: 2rem; font-weight: 800; color: #f5f5f5;
+    box-shadow: 0 0 28px rgba(165,180,252,0.45), 0 0 56px rgba(45,212,191,0.2);
+    animation: avatarPulse 3.5s ease-in-out infinite;
+    position: relative; z-index: 1;
+}
+
+.pg-name { font-family:'Courier Prime', 'Courier', monospace; font-size:1.7rem; font-weight:800;
+            color:#f1f5f9; margin:0 0 4px 0; letter-spacing:-0.3px; }
+.pg-email { font-family:'Courier Prime', 'Courier', monospace; font-size:0.88rem; color:#64748b; margin:0 0 10px 0; }
+.pg-badge {
+    display:inline-block; padding:4px 12px;
+    background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3);
+    border-radius:20px; font-family:'Courier Prime', 'Courier', monospace;
+    font-size:0.75rem; font-weight:600; color:#a5b4fc; letter-spacing:0.5px;
+}
+.stat-card {
+    background: rgba(255,255,255,0.035);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 18px;
+    padding: 1.4rem 1.2rem;
+    text-align: center;
+    position: relative; overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.14);
+}
+.stat-card::before {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,0.03) 0%,transparent 60%);
+    pointer-events:none;
+}
+.stat-num   { font-family:'Courier Prime', 'Courier', monospace; font-size:2.2rem; font-weight:800;
+              color:#f1f5f9; margin:0 0 4px 0; }
+.stat-label { font-family:'Courier Prime', 'Courier', monospace; font-size:0.78rem; color:#64748b;
+              text-transform:uppercase; letter-spacing:1px; }
+.stat-tag   { font-family:'Courier Prime', 'Courier', monospace; font-size:0.75rem; font-weight:700; color:#6366f1; letter-spacing:1px; margin-bottom:0.6rem; display:block; }
+
+.blog-row {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:0.85rem 1rem;
+    background:rgba(255,255,255,0.02);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:12px;
+    margin-bottom:0.6rem;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.blog-row:hover { background:rgba(165,180,252,0.06); border-color:rgba(165,180,252,0.2); }
+.blog-title { font-family:'Courier Prime', 'Courier', monospace; font-size:0.95rem;
+              font-weight:600; color:#e2e8f0; }
+.blog-meta  { font-family:'Courier Prime', 'Courier', monospace; font-size:0.78rem; color:#64748b; margin-top:2px; }
+.pg-section-title {
+    font-family:'Courier Prime', 'Courier', monospace; font-size:1.1rem; font-weight:700;
+    color:#f1f5f9; margin:0 0 1.2rem 0; letter-spacing:0.3px;
+}
+
+/* ── Keyframe Animations ── */
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+@keyframes liquidShimmer {
+    0%   { transform: translate(0,0) scale(1); }
+    100% { transform: translate(10%,5%) scale(1.05); }
+}
+
+@keyframes avatarPulse {
+    0%,100% { box-shadow: 0 0 28px rgba(165,180,252,0.45), 0 0 56px rgba(45,212,191,0.2); }
+    50%     { box-shadow: 0 0 40px rgba(165,180,252,0.7), 0 0 70px rgba(45,212,191,0.35); }
+}
+
+@keyframes float {
+    0%   { transform: translateY(0px); }
+    33%  { transform: translateY(-10px); }
+    66%  { transform: translateY(-5px); }
+    100% { transform: translateY(0px); }
+}
+
+@keyframes slideUp {
+    0%   { opacity: 0; transform: translateY(28px) scale(0.98); }
+    100% { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+@keyframes fadeIn {
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+@keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+}
+
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(99,102,241,0.2); }
+    50%       { box-shadow: 0 0 40px rgba(99,102,241,0.4), 0 0 60px rgba(45,212,191,0.15); }
+}

@@ -38,6 +38,13 @@ except ImportError:
 # -----------------------------
 # Helpers
 # -----------------------------
+def load_css(css_file: str = "styles/style.css"):
+    """Load external CSS file and inject into Streamlit DOM."""
+    css_path = Path(css_file)
+    if css_path.exists():
+        st.markdown(f"<style>{css_path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+
+
 def show_loading_screen(message: str, subtitle: str):
     """Render a premium liquid glass loading/teleporting overlay."""
     st.markdown(f"""
@@ -47,15 +54,6 @@ def show_loading_screen(message: str, subtitle: str):
             <div style="font-size:0.8rem; color:#64748b; text-transform:uppercase; letter-spacing:2px;">{subtitle}</div>
         </div>
     </div>
-    <style>
-    @keyframes pulse {{
-        0%, 100% {{ opacity: 0.6; }}
-        50% {{ opacity: 1; }}
-    }}
-    body {{
-        background-color: #0b0d19 !important;
-    }}
-    </style>
     """, unsafe_allow_html=True)
 
 
@@ -97,25 +95,24 @@ def try_stream(graph_app, inputs: Dict[str, Any]) -> Iterator[Tuple[str, Any]]:
     """
     Stream graph progress if available; else invoke.
     Yields ("updates"/"values"/"final", payload).
+
+    IMPORTANT: Never call .invoke() after .stream() — stream() already runs
+    the full graph. Calling invoke() again would generate a second blog.
+    Instead, capture the final state from the last streamed step.
     """
+    # ── mode 1: stream updates ────────────────────────────────────────────────
     try:
-        for step in graph_app.stream(inputs, stream_mode="updates"):
-            yield ("updates", step)
-        out = graph_app.invoke(inputs)
-        yield ("final", out)
-        return
-    except Exception:
-        pass
-
-    try:
+        last_state: Dict[str, Any] = {}
         for step in graph_app.stream(inputs, stream_mode="values"):
-            yield ("values", step)
-        out = graph_app.invoke(inputs)
-        yield ("final", out)
-        return
+            yield ("updates", step)
+            last_state = step  # each "values" step IS the full state at that point
+        if last_state:
+            yield ("final", last_state)
+            return
     except Exception:
         pass
 
+    # ── fallback: plain invoke ────────────────────────────────────────────────
     out = graph_app.invoke(inputs)
     yield ("final", out)
 
@@ -187,11 +184,11 @@ def render_markdown_with_local_images(md: str):
                     parts[i + 1] = ("md", rest)
 
         if src.startswith("http://") or src.startswith("https://"):
-            st.image(src, caption=caption or (alt or None), use_container_width=True)
+            st.image(src, caption=caption or (alt or None), width="stretch")
         else:
             img_path = _resolve_image_path(src)
             if img_path.exists():
-                st.image(str(img_path), caption=caption or (alt or None), use_container_width=True)
+                st.image(str(img_path), caption=caption or (alt or None), width="stretch")
             else:
                 st.warning(f"Image not found: `{src}` (looked for `{img_path}`)")
 
@@ -231,11 +228,14 @@ def extract_title_from_md(md: str, fallback: str) -> str:
 # Streamlit UI
 # -----------------------------
 st.set_page_config(
-    page_title="Medhā!",
-    page_icon="✍️",
+    page_title="GraphLoom",
+    page_icon="images/graphloom_favicon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Load external CSS styles
+load_css("styles/style.css")
 
 # Initialise DB tables (no-op if DB not configured)
 if _AUTH_AVAILABLE:
@@ -245,36 +245,41 @@ if _AUTH_AVAILABLE:
         pass
 
 # ── Cookie manager (must be initialised before any st.stop()) ────
-_cookie_manager = stx.CookieManager(key="medha_cm") if _COOKIES_AVAILABLE else None
+_cookie_manager = stx.CookieManager(key="graphloom_cm") if _COOKIES_AVAILABLE else None
 
 # Handle pending cookie deletion on logout
 if _COOKIES_AVAILABLE and _cookie_manager and st.session_state.get("logout_pending"):
     st.session_state.pop("logout_pending", None)
     try:
-        _cookie_manager.delete("medha_session", key="logout_delete_cookie")
-        _cookie_manager.delete("medha_page", key="logout_delete_page_cookie")
+        _cookie_manager.delete("graphloom_session", key="logout_delete_cookie")
+        _cookie_manager.delete("graphloom_page", key="logout_delete_page_cookie")
     except Exception:
         pass
 
 # Auto-restore session from cookie on page load / refresh
 if _AUTH_AVAILABLE and _COOKIES_AVAILABLE and "user" not in st.session_state:
     if not st.session_state.get("logged_out", False):
-        if "cookie_checked" not in st.session_state:
-            st.session_state["cookie_checked"] = False
+        cookies = _cookie_manager.get_all()   # only ONE get_all() per run
 
-        cookies = _cookie_manager.get_all()
-        if not cookies and not st.session_state["cookie_checked"]:
-            st.session_state["cookie_checked"] = True
-            show_loading_screen("REFRESHING...", "F5 on duty")
-            st.stop()
-        else:
-            if cookies:
-                _token = cookies.get("medha_session")
-                if _token:
-                    _user_from_cookie = verify_session_token(str(_token))
-                    if _user_from_cookie:
-                        st.session_state["user"] = _user_from_cookie
-                        st.session_state["page"] = cookies.get("medha_page", "home")
+        if not cookies and not st.session_state.get("_cookie_hydrated", False):
+            # Cookie manager JS bridge needs one extra rerun to hydrate.
+            # Guard with flag so we don't loop forever.
+            st.session_state["_cookie_hydrated"] = True
+            show_loading_screen("REFRESHING...", "Restoring session...")
+            st.rerun()
+            # ↑ script fully restarts here — code below won't execute this run
+
+        if cookies:
+            _token = cookies.get("graphloom_session")
+            if _token:
+                _user_from_cookie = verify_session_token(str(_token))
+                if _user_from_cookie:
+                    st.session_state["user"] = _user_from_cookie
+                    st.session_state["page"] = cookies.get("graphloom_page", "home")
+
+        # Always reset hydration flag once we've attempted cookie restore
+        st.session_state["_cookie_hydrated"] = False
+
 
 # ── Auth helpers ─────────────────────────────────────────────
 def _render_auth_page():
@@ -283,13 +288,12 @@ def _render_auth_page():
     with col2:
         st.markdown("""
         <div style="text-align:center; padding:2.5rem 0 1.5rem 0;">
-            <!-- <div style="font-size:3.5rem; margin-bottom:0.5rem;">🖊️</div> -->
             <h1 style="font-family:'Courier',monospace; font-size:2.4rem; font-weight:800;
                 background:linear-gradient(135deg,#a5b4fc 0%,#818cf8 50%,#2dd4bf 100%);
                 -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-                background-clip:text; margin:0 0 0.3rem 0;">Medhā!</h1>
+                background-clip:text; margin:0 0 0.3rem 0;">GraphLoom</h1>
             <p style="color:#94a3b8; font-family:'Courier',monospace; font-size:0.9rem;
-                letter-spacing:1px; margin:0;">NEURAL BLOG GENERATING AGENT</p>
+                letter-spacing:1px; margin:0;">GRAPH-POWERED BLOG GENERATION ENGINE</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -301,7 +305,7 @@ def _render_auth_page():
             with st.form("login_form", clear_on_submit=False):
                 email_in = st.text_input("Email", placeholder="you@example.com")
                 pass_in  = st.text_input("Password", type="password", placeholder="********")
-                if st.form_submit_button("Login", use_container_width=True, type="primary"):
+                if st.form_submit_button("Login", width="stretch", type="primary"):
                     if not email_in or not pass_in:
                         st.error("Please fill in all fields.")
                     else:
@@ -318,7 +322,7 @@ def _render_auth_page():
                                            placeholder="Min 6 characters", key="reg_pass")
                 confirm_in = st.text_input("Confirm Password", type="password",
                                            placeholder="Repeat password", key="reg_confirm")
-                if st.form_submit_button("Create Account", use_container_width=True, type="primary"):
+                if st.form_submit_button("Create Account", width="stretch", type="primary"):
                     if pass_in2 != confirm_in:
                         st.error("Passwords do not match.")
                     elif not name_in.strip() or not email_in2.strip() or not pass_in2:
@@ -350,147 +354,12 @@ def _render_profile_page(user: dict):
     now = datetime.now(timezone.utc)
     days_active = (now - member_since.replace(tzinfo=timezone.utc)).days if member_since else 0
 
-    # ── Liquid glass CSS (profile-specific) ──────────────────
-    st.markdown("""
-    <style>
-    .pg-hero {
-        background: rgba(255,255,255,0.04);
-        backdrop-filter: blur(32px) saturate(200%);
-        -webkit-backdrop-filter: blur(32px) saturate(200%);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 28px;
-        padding: 2.5rem 2rem;
-        display: flex;
-        align-items: center;
-        gap: 2rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 8px 40px rgba(0,0,0,0.35),
-                    inset 0 1px 0 rgba(255,255,255,0.12),
-                    inset 0 -1px 0 rgba(0,0,0,0.2);
-        position: relative;
-        overflow: hidden;
-    }
-    .pg-hero::before {
-        content: '';
-        position: absolute; inset: 0;
-        background: linear-gradient(135deg,
-            rgba(165,180,252,0.08) 0%,
-            rgba(45,212,191,0.05) 50%,
-            rgba(139,92,246,0.08) 100%);
-        pointer-events: none;
-    }
-    .pg-hero::after {
-        content: '';
-        position: absolute;
-        top: -60%; left: -30%;
-        width: 120%; height: 120%;
-        background: radial-gradient(ellipse, rgba(165,180,252,0.08) 0%, transparent 70%);
-        animation: liquidShimmer 6s ease-in-out infinite alternate;
-        pointer-events: none;
-    }
-    @keyframes liquidShimmer {
-        0%   { transform: translate(0,0) scale(1); }
-        100% { transform: translate(10%,5%) scale(1.05); }
-    }
-    .pg-avatar {
-        width: 90px; height: 90px; min-width: 90px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #2dd4bf 100%);
-        display: flex; align-items: center; justify-content: center;
-        font-family: 'Courier Prime', 'Courier', monospace;
-        font-size: 2rem; font-weight: 800; color: #f5f5f5;
-        box-shadow: 0 0 28px rgba(165,180,252,0.45), 0 0 56px rgba(45,212,191,0.2);
-        animation: avatarPulse 3.5s ease-in-out infinite;
-        position: relative; z-index: 1;
-    }
-    @keyframes avatarPulse {
-        0%,100% { box-shadow: 0 0 28px rgba(165,180,252,0.45), 0 0 56px rgba(45,212,191,0.2); }
-        50%     { box-shadow: 0 0 40px rgba(165,180,252,0.7), 0 0 70px rgba(45,212,191,0.35); }
-    }
-    .pg-name  { font-family:'Courier Prime', 'Courier', monospace; font-size:1.7rem; font-weight:800;
-                color:#f1f5f9; margin:0 0 4px 0; letter-spacing:-0.3px; }
-    .pg-email { font-family:'Courier Prime', 'Courier', monospace; font-size:0.88rem; color:#64748b; margin:0 0 10px 0; }
-    .pg-badge {
-        display:inline-block; padding:4px 12px;
-        background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3);
-        border-radius:20px; font-family:'Courier Prime', 'Courier', monospace;
-        font-size:0.75rem; font-weight:600; color:#a5b4fc; letter-spacing:0.5px;
-    }
-    .stat-card {
-        background: rgba(255,255,255,0.035);
-        backdrop-filter: blur(20px) saturate(180%);
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
-        border: 1px solid rgba(255,255,255,0.09);
-        border-radius: 18px;
-        padding: 1.4rem 1.2rem;
-        text-align: center;
-        position: relative; overflow: hidden;
-        box-shadow: 0 4px 24px rgba(0,0,0,0.25),
-                    inset 0 1px 0 rgba(255,255,255,0.08);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .stat-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 36px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.14);
-    }
-    .stat-card::before {
-        content:''; position:absolute; inset:0;
-        background:linear-gradient(135deg,rgba(255,255,255,0.03) 0%,transparent 60%);
-        pointer-events:none;
-    }
-    .stat-num   { font-family:'Courier Prime', 'Courier', monospace; font-size:2.2rem; font-weight:800;
-                  color:#f1f5f9; margin:0 0 4px 0; }
-    .stat-label { font-family:'Courier Prime', 'Courier', monospace; font-size:0.78rem; color:#64748b;
-                  text-transform:uppercase; letter-spacing:1px; }
-    .stat-tag   { font-family:'Courier Prime', 'Courier', monospace; font-size:0.75rem; font-weight:700; color:#6366f1; letter-spacing:1px; margin-bottom:0.6rem; display:block; }
-    
-    /* Native Streamlit border container overrides for Glassmorphism */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: rgba(255,255,255,0.03) !important;
-        backdrop-filter: blur(24px) !important;
-        -webkit-backdrop-filter: blur(24px) !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        border-radius: 20px !important;
-        padding: 1.6rem !important;
-        margin-bottom: 1.5rem !important;
-        box-shadow: 0 4px 32px rgba(0,0,0,0.2),
-                    inset 0 1px 0 rgba(255,255,255,0.06) !important;
-    }
-    
-    /* Special tint for Danger Zone block */
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.danger-header) {
-        background: rgba(239,68,68,0.05) !important;
-        border: 1px solid rgba(239,68,68,0.2) !important;
-        box-shadow: 0 4px 32px rgba(239,68,68,0.1),
-                    inset 0 1px 0 rgba(255,255,255,0.02) !important;
-    }
-
-    .blog-row {
-        display:flex; justify-content:space-between; align-items:center;
-        padding:0.85rem 1rem;
-        background:rgba(255,255,255,0.02);
-        border:1px solid rgba(255,255,255,0.06);
-        border-radius:12px;
-        margin-bottom:0.6rem;
-        transition: background 0.2s ease, border-color 0.2s ease;
-    }
-    .blog-row:hover { background:rgba(165,180,252,0.06); border-color:rgba(165,180,252,0.2); }
-    .blog-title { font-family:'Courier Prime', 'Courier', monospace; font-size:0.95rem;
-                  font-weight:600; color:#e2e8f0; }
-    .blog-meta  { font-family:'Courier Prime', 'Courier', monospace; font-size:0.78rem; color:#64748b; margin-top:2px; }
-    .pg-section-title {
-        font-family:'Courier Prime', 'Courier', monospace; font-size:1.1rem; font-weight:700;
-        color:#f1f5f9; margin:0 0 1.2rem 0; letter-spacing:0.3px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     # ── Back navigation ──────────────────────────────────────
-    if st.button("BACK TO MEDHĀ!", key="back_from_profile"):
+    if st.button("BACK TO GRAPHLOOM", key="back_from_profile", width="stretch"):
         st.session_state["back_to_home_pending"] = True
         if _COOKIES_AVAILABLE and _cookie_manager:
             _cookie_manager.set(
-                "medha_page",
+                "graphloom_page",
                 "home",
                 max_age=30 * 24 * 3600,
                 key="back_home_page_cookie_set"
@@ -570,7 +439,7 @@ def _render_profile_page(user: dict):
             with st.expander("Change Display Name", expanded=False):
                 with st.form("change_name_form"):
                     new_name = st.text_input("New Name", value=stats["name"])
-                    if st.form_submit_button("Update Name", type="primary", use_container_width=True):
+                    if st.form_submit_button("Update Name", type="primary", width="stretch"):
                         if update_user_name(uid, new_name):
                             st.session_state["user"]["name"] = new_name.strip()
                             st.session_state.pop("profile_stats", None)
@@ -584,7 +453,7 @@ def _render_profile_page(user: dict):
                     old_p = st.text_input("Current Password", type="password")
                     new_p = st.text_input("New Password", type="password", placeholder="Min 6 characters")
                     cnf_p = st.text_input("Confirm New Password", type="password")
-                    if st.form_submit_button("Update Password", type="primary", use_container_width=True):
+                    if st.form_submit_button("Update Password", type="primary", width="stretch"):
                         if new_p != cnf_p:
                             st.error("Passwords do not match.")
                         else:
@@ -605,7 +474,7 @@ def _render_profile_page(user: dict):
             with st.expander("Delete My Account", expanded=False):
                 with st.form("delete_acc_form"):
                     confirm_pass = st.text_input("Enter your password to confirm", type="password")
-                    if st.form_submit_button("Delete Account Forever", use_container_width=True):
+                    if st.form_submit_button("Delete Account Forever", width="stretch"):
                         res = delete_user_account(uid, confirm_pass)
                         if res == "ok":
                             st.session_state.clear()
@@ -615,459 +484,63 @@ def _render_profile_page(user: dict):
                             st.error(res)
 
 
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Share+Tech+Mono&display=swap');
 
-/* Base Override */
-html, body, [class*="css"] {
-    font-family: 'Courier Prime', 'Courier', monospace;
-    color: #cbd5e1;
-    scroll-behavior: smooth;
-}
-
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Courier Prime', 'Courier', monospace;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-}
-
-.cyber-tab-header {
-    font-family: 'Courier Prime', 'Courier', monospace;
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #a5b4fc;
-    letter-spacing: 0.8px;
-    margin: 0.5rem 0 1.5rem 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.stApp {
-    background-color: #080914 !important;
-    background-image: 
-        radial-gradient(at 0% 0%, rgba(129, 140, 248, 0.12) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
-        radial-gradient(at 50% 100%, rgba(45, 212, 191, 0.08) 0px, transparent 60%) !important;
-    min-height: 100vh;
-    position: relative;
-    overflow-x: hidden;
-}
-
-/* Soothing floating color blobs */
-.stApp::before {
-    content: '';
-    position: absolute;
-    top: 10%;
-    left: 15%;
-    width: 500px;
-    height: 500px;
-    background: radial-gradient(circle, rgba(129, 140, 248, 0.12) 0%, transparent 70%);
-    filter: blur(100px);
-    pointer-events: none;
-    z-index: 0;
-    animation: blobFloat 25s infinite ease-in-out alternate;
-}
-
-.stApp::after {
-    content: '';
-    position: absolute;
-    bottom: 15%;
-    right: 15%;
-    width: 550px;
-    height: 550px;
-    background: radial-gradient(circle, rgba(45, 212, 191, 0.08) 0%, transparent 70%);
-    filter: blur(100px);
-    pointer-events: none;
-    z-index: 0;
-    animation: blobFloat 30s infinite ease-in-out alternate-reverse;
-}
-
-/* Glassmorphic Sidebar styling */
-[data-testid="stSidebar"] {
-    background: rgba(11, 13, 28, 0.6) !important;
-    backdrop-filter: blur(35px) !important;
-    -webkit-backdrop-filter: blur(35px) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
-    box-shadow: 15px 0 45px rgba(0, 0, 0, 0.45) !important;
-    z-index: 100;
-}
-
-/* Sidebar header */
-.sidebar-header {
-    font-family: 'Courier Prime', 'Courier', monospace;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #f1f5f9;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    padding-bottom: 12px;
-    margin-bottom: 22px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-
-/* Sidebar Widget labels */
-[data-testid="stSidebar"] label[data-testid="stWidgetLabel"] p,
-label[data-testid="stWidgetLabel"] p {
-    color: #94a3b8 !important;
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    font-size: 0.85rem !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.5px;
-}
-
-/* Text fields and Textareas - Frosted */
-.stTextArea textarea, .stTextInput input, .stDateInput input {
-    background: rgba(255, 255, 255, 0.02) !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    border-radius: 12px !important;
-    color: #f1f5f9 !important;
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2) !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    padding: 0.65rem 0.9rem !important;
-}
-
-.stTextArea textarea:focus, .stTextInput input:focus, .stDateInput input:focus {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border-color: rgba(165, 180, 252, 0.5) !important; /* Soft Lavender */
-    box-shadow: 0 0 20px rgba(165, 180, 252, 0.2) !important;
-}
-
-/* Primary generate button with soft gradient glow styling */
-[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, rgba(129, 140, 248, 0.8) 0%, rgba(45, 212, 191, 0.8) 100%) !important;
-    color: #f5f5f5 !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    backdrop-filter: blur(12px) !important;
-    border-radius: 12px !important;
-    padding: 0.75rem 1.5rem !important;
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    font-size: 0.95rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.5px !important;
-    width: 100% !important;
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    box-shadow: 0 4px 20px rgba(129, 140, 248, 0.25) !important;
-    cursor: pointer;
-}
-
-[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 30px rgba(129, 140, 248, 0.35), 0 0 20px rgba(45, 212, 191, 0.25) !important;
-    border-color: rgba(255, 255, 255, 0.3) !important;
-}
-
-[data-testid="stSidebar"] .stButton > button[kind="primary"]:active {
-    transform: translateY(0px) !important;
-}
-
-/* Secondary Button inside Sidebar (e.g. Load selected blog) */
-[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
-    background: rgba(255, 255, 255, 0.03) !important;
-    color: #cbd5e1 !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    border-radius: 12px !important;
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    font-size: 0.9rem !important;
-    font-weight: 500 !important;
-    width: 100% !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    cursor: pointer;
-}
-
-[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: #f5f5f5 !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-    transform: translateY(-1px) !important;
-}
-
-/* Radio buttons list in sidebar */
-[data-testid="stRadio"] label {
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    font-size: 0.9rem !important;
-    color: #94a3b8 !important;
-    transition: all 0.2s ease;
-}
-
-[data-testid="stRadio"] label:hover {
-    color: #f5f5f5 !important;
-}
-
-/* Tabs: Cyber Holographic styling */
-.stTabs [data-baseweb="tab-list"] {
-    background: rgba(255, 255, 255, 0.02) !important;
-    border-radius: 16px !important;
-    padding: 0.4rem !important;
-    border: 1px solid rgba(255, 255, 255, 0.05) !important;
-    gap: 8px !important;
-    margin-bottom: 2rem !important;
-}
-
-.stTabs [data-baseweb="tab"] {
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    font-size: 0.9rem !important;
-    font-weight: 600 !important;
-    color: #94a3b8 !important;
-    padding: 0.5rem 1.2rem !important;
-    border-radius: 12px !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    border: 1px solid transparent !important;
-}
-
-.stTabs [data-baseweb="tab"]:hover {
-    color: #f5f5f5 !important;
-    background: rgba(255, 255, 255, 0.04) !important;
-}
-
-.stTabs [aria-selected="true"] {
-    background: rgba(129, 140, 248, 0.15) !important;
-    color: #f5f5f5 !important;
-    border: 1px solid rgba(129, 140, 248, 0.3) !important;
-    box-shadow: 0 4px 20px rgba(129, 140, 248, 0.2) !important;
-}
-
-/* Frosted Glass Panels, Dataframes & Expanders */
-.stDataFrame, [data-testid="stExpander"] {
-    background: rgba(255, 255, 255, 0.02) !important;
-    border: 1px solid rgba(255, 255, 255, 0.05) !important;
-    border-radius: 16px !important;
-    backdrop-filter: blur(25px) !important;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-[data-testid="stExpander"]:hover {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border-color: rgba(129, 140, 248, 0.2) !important;
-    box-shadow: 0 8px 32px 0 rgba(129, 140, 248, 0.1) !important;
-}
-
-/* Status box override */
-[data-testid="stStatus"] {
-    background: rgba(255, 255, 255, 0.02) !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    border-radius: 14px !important;
-    color: #cbd5e1 !important;
-    box-shadow: 0 4px 25px rgba(0,0,0,0.2) !important;
-}
-
-/* Download buttons */
-.stDownloadButton > button {
-    background: rgba(255, 255, 255, 0.02) !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    border-radius: 12px !important;
-    color: #cbd5e1 !important;
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    font-size: 0.9rem !important;
-    font-weight: 600 !important;
-    padding: 0.65rem 1.4rem !important;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-.stDownloadButton > button:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: #f5f5f5 !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-    transform: translateY(-1px) !important;
-}
-
-/* Custom Scrollbars */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
-
-/* Custom Animations & Component Styles */
-.cyber-header {
-    position: relative;
-    padding: 2.5rem 1.5rem;
-    margin-bottom: 2.2rem;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 20px;
-    text-align: center;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.35), inset 0 0 20px rgba(255,255,255,0.01);
-    backdrop-filter: blur(30px);
-    overflow: hidden;
-    animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.cyber-scanline {
-    position: absolute;
-    top: -50%; left: -50%; width: 200%; height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 60%);
-    animation: rotateLiquid 25s linear infinite;
-    pointer-events: none;
-}
-
-.cyber-title {
-    font-family: 'Courier Prime', 'Courier', monospace !important;
-    font-size: 3rem !important;
-    font-weight: 800 !important;
-    margin: 0 0 0.5rem 0 !important;
-    background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 50%, #2dd4bf 100%);
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
-    text-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
-    letter-spacing: -1px !important;
-}
-
-.cyber-subtitle {
-    font-family: 'Courier Prime', 'Courier', monospace;
-    font-weight: 400;
-    font-size: 0.95rem;
-    color: #94a3b8;
-    margin-bottom: 1rem;
-    letter-spacing: 0.5px;
-}
-
-.cyber-badge-container {
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-    margin-top: 12px;
-}
-
-.cyber-badge {
-    display: inline-block;
-    padding: 0.35rem 0.9rem;
-    font-family: 'Courier Prime', 'Courier', monospace;
-    font-weight: 500;
-    font-size: 0.75rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    color: #cbd5e1;
-    border-radius: 8px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.cyber-ready-card {
-    background: rgba(255, 255, 255, 0.01);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 28px;
-    padding: 3.5rem 2rem;
-    text-align: center;
-    max-width: 650px;
-    margin: 3.5rem auto;
-    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(25px);
-    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.cyber-ready-icon {
-    font-size: 4rem;
-    margin-bottom: 1.5rem;
-    filter: drop-shadow(0 4px 15px rgba(255, 255, 255, 0.15));
-    animation: float 4s ease-in-out infinite;
-}
-
-.cyber-ready-title {
-    font-family: 'Courier Prime', 'Courier', monospace;
-    color: #f5f5f5;
-    font-size: 1.6rem;
-    font-weight: 700;
-    margin-bottom: 0.75rem;
-    letter-spacing: -0.5px;
-}
-
-/* Glassmorphic border containers styling (global) */
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    background: rgba(255, 255, 255, 0.03) !important;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 20px !important;
-    padding: 1.6rem !important;
-    margin-bottom: 1.5rem !important;
-    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
-}
-
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.danger-header) {
-    background: rgba(239, 68, 68, 0.05) !important;
-    border: 1px solid rgba(239, 68, 68, 0.2) !important;
-    box-shadow: 0 4px 32px rgba(239, 68, 68, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.02) !important;
-}
-
-/* Animations */
-@keyframes rotateLiquid {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-@keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
-    100% { transform: translateY(0px); }
-}
-
-@keyframes slideUp {
-    0% { opacity: 0; transform: translateY(20px); }
-    100% { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes blobFloat {
-    0% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(40px, -30px) scale(1.08); }
-    100% { transform: translate(-30px, 40px) scale(0.95); }
-}
-</style>
-""", unsafe_allow_html=True)
 
 # Intercept pending auth database load actions (shows loading screen while querying)
 if "login_pending" in st.session_state:
     show_loading_screen("Check Post!!!", "Verifying Credentials")
     pending = st.session_state.pop("login_pending")
-    user = login_user(pending["email"], pending["password"])
-    if user:
-        st.session_state["user"] = user
-        st.session_state["logged_out"] = False
-        if _COOKIES_AVAILABLE and _cookie_manager:
-            _cookie_manager.set(
-                "medha_session",
-                create_session_token(user),
-                max_age=30 * 24 * 3600,
-                key="login_cookie_set"
-            )
-            _cookie_manager.set(
-                "medha_page",
-                "home",
-                max_age=30 * 24 * 3600,
-                key="login_page_cookie_set"
-            )
-        st.session_state["page"] = "home"
-    else:
-        st.session_state["login_error"] = "Invalid email or password."
+    try:
+        user = login_user(pending["email"], pending["password"])
+        if user:
+            st.session_state["user"] = user
+            st.session_state["logged_out"] = False
+            if _COOKIES_AVAILABLE and _cookie_manager:
+                _cookie_manager.set(
+                    "graphloom_session",
+                    create_session_token(user),
+                    max_age=30 * 24 * 3600,
+                    key="login_cookie_set"
+                )
+                _cookie_manager.set(
+                    "graphloom_page",
+                    "home",
+                    max_age=30 * 24 * 3600,
+                    key="login_page_cookie_set"
+                )
+            st.session_state["page"] = "home"
+        else:
+            st.session_state["login_error"] = "Invalid email or password."
+    except Exception as e:
+        st.session_state["login_error"] = f"Login failed: {e}"
     st.rerun()
 
 if "register_pending" in st.session_state:
     show_loading_screen("H! HUMAN...", "Creating Secure Account")
     pending = st.session_state.pop("register_pending")
-    result = register_user(pending["name"], pending["email"], pending["password"])
-    if isinstance(result, dict):
-        st.session_state["user"] = result
-        st.session_state["logged_out"] = False
-        if _COOKIES_AVAILABLE and _cookie_manager:
-            _cookie_manager.set(
-                "medha_session",
-                create_session_token(result),
-                max_age=30 * 24 * 3600,
-                key="register_cookie_set"
-            )
-            _cookie_manager.set(
-                "medha_page",
-                "home",
-                max_age=30 * 24 * 3600,
-                key="register_page_cookie_set"
-            )
-        st.session_state["page"] = "home"
-    else:
-        st.session_state["register_error"] = str(result)
+    try:
+        result = register_user(pending["name"], pending["email"], pending["password"])
+        if isinstance(result, dict):
+            st.session_state["user"] = result
+            st.session_state["logged_out"] = False
+            if _COOKIES_AVAILABLE and _cookie_manager:
+                _cookie_manager.set(
+                    "graphloom_session",
+                    create_session_token(result),
+                    max_age=30 * 24 * 3600,
+                    key="register_cookie_set"
+                )
+                _cookie_manager.set(
+                    "graphloom_page",
+                    "home",
+                    max_age=30 * 24 * 3600,
+                    key="register_page_cookie_set"
+                )
+            st.session_state["page"] = "home"
+        else:
+            st.session_state["register_error"] = str(result)
+    except Exception as e:
+        st.session_state["register_error"] = f"Registration failed: {e}"
     st.rerun()
 
 # ── Auth gate ────────────────────────────────────────────────
@@ -1105,43 +578,51 @@ if st.session_state["page"] == "profile" and _AUTH_AVAILABLE and _current_user:
     st.stop()
 
 # ── Hero header ──────────────────────────────────────────────
-st.markdown("""
-<div class="cyber-header">
-  <div class="cyber-scanline"></div>
-  <h1 class="cyber-title">Medhā!</h1>
-  <div class="cyber-subtitle">NEURAL BLOG GENERATING AGENT | POWERED BY LANGGRAPH</div>
-  <div class="cyber-badge-container">
-    <span class="cyber-badge">SYSTEM STATUS: ONLINE</span>
-    <span class="cyber-badge" style="border-color: rgba(255,255,255,0.15); color: #cbd5e1;">CORE: ACTIVE</span>
-  </div>
-</div>
+# Embed logo as base64 background inside the header card
+import base64 as _b64
+
+@st.cache_data
+def _load_logo_b64() -> str:
+    _logo_path = Path("images/graphloom_logo.png")
+    if _logo_path.exists():
+        with open(_logo_path, "rb") as _f:
+            return _b64.b64encode(_f.read()).decode()
+    return ""
+
+_logo_b64 = _load_logo_b64()
+
+_logo_bg_css = ""
+if _logo_b64:
+    _logo_bg_css = f"""
+<style>
+.cyber-header {{
+    background-image: url("data:image/png;base64,{_logo_b64}") !important;
+    background-size: 100% auto !important;
+    background-repeat: no-repeat !important;
+    background-position: center center !important;
+}}
+</style>
+"""
+
+st.markdown(_logo_bg_css + """
+<div class="cyber-header"></div>
 """, unsafe_allow_html=True)
+
 
 with st.sidebar:
     # ── User info + logout ────────────────────────────────
     if _current_user:
-        # st.markdown(f"""
-        # <div style="padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08);
-        #     margin-bottom:16px;">
-        #     <div style="font-family:'Courier',monospace; font-size:0.78rem;
-        #         color:#94a3b8; margin-bottom:2px;">Logged in as</div>
-        #     <div style="font-family:'Courier',monospace; font-size:1rem;
-        #         font-weight:700; color:#f1f5f9;">👤 {_current_user['name']}</div>
-        #     <div style="font-family:'Courier',monospace; font-size:0.78rem;
-        #         color:#64748b;">{_current_user['email']}</div>
-        # </div>
-        # """, unsafe_allow_html=True)
-        if st.button("MY PROFILE", use_container_width=True):
+        if st.button("MY PROFILE", width="stretch"):
             st.session_state["profile_pending"] = True
             if _COOKIES_AVAILABLE and _cookie_manager:
                 _cookie_manager.set(
-                    "medha_page",
+                    "graphloom_page",
                     "profile",
                     max_age=30 * 24 * 3600,
                     key="profile_page_cookie_set"
                 )
             st.rerun()
-        if st.button("LOGOUT", use_container_width=True):
+        if st.button("LOGOUT", width="stretch"):
             st.session_state["logout_pending"] = True
             st.session_state["logged_out"] = True
             st.session_state.pop("user", None)
@@ -1164,7 +645,7 @@ with st.sidebar:
         placeholder="e.g. How Transformer attention works…",
     )
     as_of = st.date_input("AS OF DATE", value=date.today())
-    run_btn = st.button("GENERATE BLOG", type="primary")
+    run_btn = st.button("GENERATE BLOG", type="primary", width="stretch")
 
     st.divider()
     st.markdown("""
@@ -1199,7 +680,7 @@ with st.sidebar:
         )
         selected_blog_id = _blog_id_map.get(_sel_label)
 
-        if st.button("LOAD SELECTED BLOG"):
+        if st.button("LOAD SELECTED BLOG", width="stretch"):
             if selected_blog_id and _current_user:
                 _blog = get_blog_content(selected_blog_id, _current_user["id"])
                 if _blog:
@@ -1217,13 +698,10 @@ with st.sidebar:
                     st.rerun()
 
     st.divider()
-    st.markdown("© 2026 Medhā! - All rights reserved.")
+    st.markdown("© 2026 GraphLoom — All rights reserved.")
     
 
-# Keep your topic input as-is; optionally prefill for next run after loading a blog
-if "topic_prefill" in st.session_state and isinstance(st.session_state["topic_prefill"], str):
-    # Do not mutate widgets; just keep as a hint.
-    pass
+
 
 # Storage for latest run
 if "last_out" not in st.session_state:
@@ -1280,12 +758,20 @@ if run_btn:
 
             current_state = extract_latest_state(current_state, payload)
 
+            _plan_val = current_state.get("plan")
+            _tasks_cnt = None
+            if _plan_val:
+                if hasattr(_plan_val, "tasks"):
+                    _tasks_cnt = len(_plan_val.tasks)
+                elif isinstance(_plan_val, dict):
+                    _tasks_cnt = len(_plan_val.get("tasks", []))
+
             summary = {
                 "mode": current_state.get("mode"),
                 "needs_research": current_state.get("needs_research"),
                 "queries": current_state.get("queries", [])[:5] if isinstance(current_state.get("queries"), list) else [],
                 "evidence_count": len(current_state.get("evidence", []) or []),
-                "tasks": len((current_state.get("plan") or {}).get("tasks", [])) if isinstance(current_state.get("plan"), dict) else None,
+                "tasks": _tasks_cnt,
                 "images": len(current_state.get("image_specs", []) or []),
                 "sections_done": len(current_state.get("sections", []) or []),
             }
@@ -1396,7 +882,7 @@ if out:
                         for t in tasks
                     ]
                 ).sort_values("id")
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(df, width="stretch", hide_index=True)
 
                 with st.expander("Task details"):
                     st.json(tasks)
@@ -1420,7 +906,7 @@ if out:
                         "url": e.get("url"),
                     }
                 )
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     # --- Preview tab ---
     with tab_preview:
@@ -1446,6 +932,7 @@ if out:
                 data=final_md.encode("utf-8"),
                 file_name=md_filename,
                 mime="text/markdown",
+                width="stretch",
             )
 
             bundle = bundle_zip(final_md, md_filename, Path("images"), allowed_filenames)
@@ -1454,6 +941,7 @@ if out:
                 data=bundle,
                 file_name=f"{safe_slug(blog_title)}_bundle.zip",
                 mime="application/zip",
+                width="stretch",
             )
 
     # --- Images tab ---
@@ -1475,7 +963,7 @@ if out:
                     st.warning("No image files found on disk for this blog.")
                 else:
                     for p in sorted(files):
-                        st.image(str(p), caption=p.name, use_container_width=True)
+                        st.image(str(p), caption=p.name, width="stretch")
 
                 z = images_zip(images_dir, allowed_filenames)
                 if z:
@@ -1484,6 +972,7 @@ if out:
                         data=z,
                         file_name="images.zip",
                         mime="application/zip",
+                        width="stretch",
                     )
 
     # --- Logs tab ---

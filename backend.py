@@ -539,6 +539,35 @@ def _safe_slug(title: str) -> str:
     return s or "blog"
 
 
+def _process_single_image(spec: dict, images_dir: Path) -> tuple[dict, Optional[bytes], str]:
+    placeholder = spec["placeholder"]
+    img_filename = spec["filename"]
+    out_path = images_dir / img_filename
+
+    img_bytes: Optional[bytes] = None
+    if not out_path.exists():
+        try:
+            img_bytes = _gemini_generate_image_bytes(spec["prompt"])
+            out_path.write_bytes(img_bytes)
+        except Exception:
+            try:
+                # premium Pillow glassmorphic fallback
+                img_bytes = _generate_placeholder_diagram(spec["prompt"], img_filename, spec.get("caption", "Simulation"))
+                out_path.write_bytes(img_bytes)
+            except Exception:
+                # fallback to text block if Pillow also fails
+                prompt_block = (
+                    f"> **[IMAGE PLACEHOLDER]** {spec.get('caption','')}\n>\n"
+                    f"> **Alt:** {spec.get('alt','')}\n"
+                )
+                return spec, None, prompt_block
+    else:
+        img_bytes = out_path.read_bytes()
+
+    img_md = f"![{spec['alt']}](images/{img_filename})\n*{spec['caption']}*"
+    return spec, img_bytes, img_md
+
+
 def generate_and_place_images(state: State) -> dict:
     plan = state["plan"]
     assert plan is not None
@@ -560,38 +589,13 @@ def generate_and_place_images(state: State) -> dict:
     images_dir = Path("images")
     images_dir.mkdir(exist_ok=True)
 
-    for spec in image_specs:
-        placeholder = spec["placeholder"]
-        img_filename = spec["filename"]
-        out_path = images_dir / img_filename
-
-        # generate only if needed
-        img_bytes: Optional[bytes] = None
-        if not out_path.exists():
-            try:
-                img_bytes = _gemini_generate_image_bytes(spec["prompt"])
-                out_path.write_bytes(img_bytes)
-            except Exception:
-                try:
-                    # premium Pillow glassmorphic fallback
-                    img_bytes = _generate_placeholder_diagram(spec["prompt"], img_filename, spec.get("caption", "Simulation"))
-                    out_path.write_bytes(img_bytes)
-                except Exception:
-                    # fallback to text block if Pillow also fails
-                    prompt_block = (
-                        f"> **[IMAGE PLACEHOLDER]** {spec.get('caption','')}\n>\n"
-                        f"> **Alt:** {spec.get('alt','')}\n"
-                    )
-                    md = md.replace(placeholder, prompt_block)
-                    continue
-        else:
-            img_bytes = out_path.read_bytes()
-
-        if img_bytes:
-            collected_images.append({"filename": img_filename, "data": img_bytes})
-
-        img_md = f"![{spec['alt']}](images/{img_filename})\n*{spec['caption']}*"
-        md = md.replace(placeholder, img_md)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(image_specs), 4)) as executor:
+        futures = [executor.submit(_process_single_image, spec, images_dir) for spec in image_specs]
+        for future in concurrent.futures.as_completed(futures):
+            spec, img_bytes, img_md = future.result()
+            if img_bytes:
+                collected_images.append({"filename": spec["filename"], "data": img_bytes})
+            md = md.replace(spec["placeholder"], img_md)
 
     slug = _safe_slug(plan.blog_title)
     Path(f"{slug}.md").write_text(md, encoding="utf-8")
