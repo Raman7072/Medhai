@@ -68,7 +68,7 @@ graph TD
     
     subgraph Reducer Subgraph ["⚙️ Reducer Subgraph"]
         Merge[📝 Merge Content] --> DecideImg[🖼️ Decide Image Specs]
-        DecideImg --> GenImg[⚡ Generate & Place Images FLUX / Pillow Fallback]
+        DecideImg --> GenImg[⚡ Generate & Place Images]
     end
     
     Workers --> Merge
