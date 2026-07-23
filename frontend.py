@@ -838,8 +838,11 @@ if run_btn:
             # Clear cached profile data so they fetch the newly created blog
             st.session_state.pop("profile_stats", None)
             st.session_state.pop("profile_blogs", None)
+            st.session_state["logs"] = st.session_state.get("logs", []) + logs
             status.update(label="✅ Done", state="complete", expanded=False)
             log("[final] received final state")
+            # Force a clean rerun so all tabs render properly from session state
+            st.rerun()
 
 # Render last result (if any)
 out = st.session_state.get("last_out")
