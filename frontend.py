@@ -316,7 +316,7 @@ def _render_auth_page():
             if "register_error" in st.session_state:
                 st.error(st.session_state.pop("register_error"))
             with st.form("register_form", clear_on_submit=False):
-                name_in    = st.text_input("Full Name", placeholder="John Doe")
+                name_in    = st.text_input("Full Name", placeholder="Steve Rogers")
                 email_in2  = st.text_input("Email", placeholder="you@example.com", key="reg_email")
                 pass_in2   = st.text_input("Password", type="password",
                                            placeholder="Min 6 characters", key="reg_pass")
