@@ -118,8 +118,8 @@ blog_agent/
 ├── styles/
 │   ├── style.css                 # Frosted glassmorphism dark aesthetic stylesheet
 │   └── images/
-│       ├── blog_agent_main_logo.png # Main application logo header (16:9 landscape)
-│       └── blog_agent_logo.png      # App favicon icon
+│       ├── favicon.png           # App favicon icon              
+│       └── logo.png              # Main application logo header (16:9 landscape)
 ├── images/
 │   ├── ss1.png                   # UI telemetry interface screenshot
 │   └── ss2.png                   # Generated markdown & image preview screenshot
